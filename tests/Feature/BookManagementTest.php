@@ -2,34 +2,30 @@
 
 namespace Tests\Feature;
 
+use App\Models\Author;
 use Tests\TestCase;
 use App\Models\Book;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
 
 class BookManagementTest extends TestCase
 {
     use RefreshDatabase;
+    use WithFaker;
     /** @test */
     public function a_book_can_be_added_to_the_library()
     {
-        // $this->withoutExceptionHandling();
-        $response = $this->post('/books', [
-            'title' => 'Cool Book Title',
-            'author' => 'Victor'
-        ]);
+        $response = $this->post('/books', Book::factory()->make()->toArray());
 
         $book = Book::first();
-        $this->assertCount(1, Book::all());
+        $this->assertDatabaseCount('books', 1);
         $response->assertRedirect($book->path);
     }
     
     /** @test */
     public function a_title_is_required()
     {
-        $response = $this->post('/books', [
-            'title' => '',
-            'author' => 'Victor'
-        ]);
+        $response = $this->post('/books', Book::factory()->noTitle()->make()->toArray());
 
         $response->assertSessionHasErrors('title');
     }
@@ -37,32 +33,27 @@ class BookManagementTest extends TestCase
     /** @test */
     public function an_author_is_required()
     {
-        $response = $this->post('/books', [
-            'title' => 'Cool Book Title',
-            'author' => ''
-        ]);
+        $response = $this->post('/books', Book::factory()->noAuthorId()->make()->toArray());
 
-        $response->assertSessionHasErrors('author');
+        $response->assertSessionHasErrors('author_id');
     }
 
     /** @test */
     public function a_book_can_be_updated()
     {
-        $this->withoutExceptionHandling();
-        $this->post('/books', [
-            'title' => 'Cool Book Title',
-            'author' => 'Victor'
-        ]);
-
+        $this->post('/books', Book::factory()->make()->toArray());
         $book = Book::first();
 
+
+        $newAuthorId = Author::factory()->create()->id;
         $response = $this->patch($book->path, [
             'title' => 'New Title',
-            'author' => 'New Author'
+            'author_id' => $newAuthorId
         ]);
-
-        $this->assertEquals('New Title', Book::first()->title);
-        $this->assertEquals('New Author', Book::first()->author);
+        $this->assertDatabaseHas('books', [
+            'title' => 'New Title',
+            'author_id' => $newAuthorId
+        ]);
         $response->assertRedirect($book->fresh()->path);
     }
 
@@ -70,14 +61,26 @@ class BookManagementTest extends TestCase
     public function a_book_can_be_deleted()
     {
         $this->withoutExceptionHandling();
-        $this->post('/books', [
-            'title' => 'Cool Book Title',
-            'author' => 'Victor'
-        ]);
-        $this->assertCount(1, Book::all());
+        $this->post('/books', Book::factory()->make()->toArray());
+        $this->assertDatabaseCount('books', 1);
+
+        $book = Book::first();
         
-        $response = $this->delete('/books/' . Book::first()->id);
-        $this->assertCount(0, Book::all());
+        $response = $this->delete('/books/' . $book->id);
+        $this->assertDeleted($book);
         $response->assertRedirect('/books');
+    }
+
+    /** @test */
+    public function a_new_author_is_automatically_added()
+    {
+        $this->withoutExceptionHandling();
+        $this->post('/books', Book::factory()->make()->toArray());
+
+        $book = Book::first();
+        $author = Author::first();
+
+        $this->assertDatabaseCount('authors', 1);
+        $this->assertEquals($author->id, $book->author->id);
     }
 }
